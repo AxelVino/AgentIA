@@ -1,3 +1,4 @@
+"""Modulo de solicitudes http"""
 import os
 import requests
 from dotenv import load_dotenv
@@ -6,7 +7,7 @@ load_dotenv()
 
 API_KEY = os.getenv("GROQ_API_KEY")
 
-def send_message(user_message):
+def send_message(user_message, model, system_prompt, history_context):
 
     """Envía un mensaje a la API de Groq y devuelve la respuesta del agente."""
 
@@ -16,12 +17,13 @@ def send_message(user_message):
         "Content-Type": "application/json"
     }
     payload = {
-        "model": "llama3-70b-8192",
+        "model": model,
         "messages": [
             {
                 "role": "system",
-                "content": "Sos una IA especializada en el rubro de alquileres e inmuebles"
+                "content": system_prompt
             },
+            *history_context,
             {
                 "role": "user",
                 "content": user_message
