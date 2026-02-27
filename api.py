@@ -1,6 +1,7 @@
 """Modulo de solicitudes http"""
 import os
 import requests
+import time
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -18,6 +19,7 @@ def send_message(user_message, model, system_prompt, history_context):
     }
     payload = {
         "model": model,
+        "stream": True,
         "messages": [
             {
                 "role": "system",
@@ -31,10 +33,30 @@ def send_message(user_message, model, system_prompt, history_context):
         ]
     }
 
-    response = requests.post(url, headers=headers, json=payload, timeout=10)
+    response = requests.post(url, headers=headers, json=payload, timeout=30, stream=True)
+    
+    fullResponse = ""
+    first_token = True
 
-    if response.status_code == 200:
-        contenido = response.json()
-        return contenido['choices'][0]['message']['content']
-    else:
-        return f"Error: {response.status_code} - {response.text}"
+    for line in response.iter_lines():
+        if line:
+            decoded = line.decode("utf-8")
+
+            if decoded.startswith("data: "):
+                data = decoded[6:]
+
+            if data == "[DONE]":
+                break
+
+            import json
+            chunk = json.loads(data)
+
+            content = chunk["choices"][0]["delta"].get("content", "")
+            if first_token:
+                print("\r" + " " * 40 + "\r", end="")  # borra el "pensando..."
+                first_token = False
+            print(content, end="", flush=True)
+            fullResponse += content
+            time.sleep(0.01)
+    print()
+    return fullResponse
