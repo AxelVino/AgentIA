@@ -1,8 +1,15 @@
 """Modulo de logica de envio y muestra de mensaje"""
+import os  
 from api import send_message
 from memory import load_memory, save_memory
+from logger import logger
 
+DEBUG = os.getenv("DEBUG") == "true"
 
+def debug(self, tittle: str, data):
+    if DEBUG:
+        print(f"\n[DEBUG] {tittle}")
+        print(data)
 
 class Assistant():
     """Clase asistente"""
@@ -19,16 +26,21 @@ class Assistant():
 
     def answer(self, user_message: str) -> None:
 
-        print(f"\n🤖 {self.name} está pensando...", end="", flush=True)
+    logger.info(f"{self.name} está pensando...")
 
-        """Aplica logica para enviar el mensaje y como mostrar la respuesta"""
+    self.add_history("user", user_message)
 
-        self.add_history("user", user_message)
+    logger.debug(f"Historial antes del envío: {self.history_context}")
 
-        response = send_message(
-            user_message,
-            model=self.model,
-            system_prompt=self.system_prompt,
-            history_context=self.history_context
-            )
-        self.add_history("assistant", response)
+    response = send_message(
+        user_message,
+        model=self.model,
+        system_prompt=self.system_prompt,
+        history_context=self.history_context
+    )
+
+    logger.debug(f"Respuesta del modelo: {response}")
+
+    self.add_history("assistant", response)
+
+    logger.debug(f"Historial final: {self.history_context}")
