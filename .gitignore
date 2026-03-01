@@ -19,3 +19,7 @@ memory/*.json
 # Entorno virtual
 venv/
 .env
+
+# Memory runtime (NO versionar)
+memory.json
+memory/
