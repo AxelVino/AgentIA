@@ -4,3 +4,18 @@ dist/
 build/
 *.log
 .DS_Store
+
+# Python cache
+__pycache__/
+*.pyc
+
+# Memory runtime
+memory/sessions/
+memory/*.json
+
+# Opcional: permitir template
+!memory/template_memory.json
+
+# Entorno virtual
+venv/
+.env

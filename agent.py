@@ -1,15 +1,7 @@
 """Modulo de logica de envio y muestra de mensaje"""
-import os  
 from api import send_message
-from memory import load_memory, save_memory
+from memory import create_session, load_session, save_session
 from logger import logger
-
-DEBUG = os.getenv("DEBUG") == "true"
-
-def debug(self, tittle: str, data):
-    if DEBUG:
-        print(f"\n[DEBUG] {tittle}")
-        print(data)
 
 class Assistant():
     """Clase asistente"""
@@ -17,30 +9,38 @@ class Assistant():
         self.name = name
         self.model = model
         self.system_prompt = system_promp
-        self.history_context = load_memory()
+
+        self.session_file = create_session()
+        self.history_context = load_session(self.session_file)
 
     def add_history(self, role: str, content: str):
         """Agregar contenido a la memoria larga"""
         self.history_context.append({"role": role, "content": content})
-        save_memory(self.history_context)
+
+        # limito el contexto
+        self.history_context = self.history_context[-20:]
+
+        save_session(self.session_file, self.history_context)
 
     def answer(self, user_message: str) -> None:
 
-    logger.info(f"{self.name} está pensando...")
+        logger.info(f"{self.name} está pensando...")
 
-    self.add_history("user", user_message)
+        self.add_history("user", user_message)
 
-    logger.debug(f"Historial antes del envío: {self.history_context}")
+        logger.trace(f"Historial antes del envío: {self.history_context}")
 
-    response = send_message(
-        user_message,
-        model=self.model,
-        system_prompt=self.system_prompt,
-        history_context=self.history_context
-    )
+        response = send_message(
+            user_message,
+            model=self.model,
+            system_prompt=self.system_prompt,
+            history_context=self.history_context,
+            assistant_name=self.name
+        )
 
-    logger.debug(f"Respuesta del modelo: {response}")
+        logger.trace(f"Respuesta cruda: {response}")
 
-    self.add_history("assistant", response)
+        self.add_history("assistant", response)
 
-    logger.debug(f"Historial final: {self.history_context}")
+        logger.debug(f"Historial final: {self.history_context}")
+        

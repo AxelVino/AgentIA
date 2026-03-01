@@ -8,7 +8,7 @@ load_dotenv()
 
 API_KEY = os.getenv("GROQ_API_KEY")
 
-def send_message(user_message, model, system_prompt, history_context):
+def send_message(user_message, model, system_prompt, history_context, assistant_name="IA"):
 
     """Envía un mensaje a la API de Groq y devuelve la respuesta del agente."""
 
@@ -32,8 +32,15 @@ def send_message(user_message, model, system_prompt, history_context):
             }
         ]
     }
-
-    response = requests.post(url, headers=headers, json=payload, timeout=30, stream=True)
+    try:
+        response = requests.post(url, headers=headers, json=payload, timeout=30, stream=True)
+        response.raise_for_status()
+    except requests.exceptions.Timeout:
+        return "⏱️ La IA tardó demasiado en responder."
+    except requests.exceptions.ConnectionError:
+        return "🌐 Error de conexión."
+    except requests.exceptions.HTTPError as e:
+        return f"⚠️ Error API: {e}"
     
     fullResponse = ""
     first_token = True
@@ -54,6 +61,7 @@ def send_message(user_message, model, system_prompt, history_context):
             content = chunk["choices"][0]["delta"].get("content", "")
             if first_token:
                 print("\r" + " " * 40 + "\r", end="")  # borra el "pensando..."
+                print(f"🤖 {assistant_name}: ", end="")
                 first_token = False
             print(content, end="", flush=True)
             fullResponse += content

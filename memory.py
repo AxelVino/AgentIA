@@ -1,22 +1,24 @@
 import json
-from pathlib import Path
+import os
+from datetime import datetime
 
-MEMORY_FILE = Path("memory.json")
+SESSION_DIR = "memory/sessions"
 
+def create_session():
+    os.makedirs(SESSION_DIR, exist_ok=True)
 
-def load_memory():
-    """Carga memoria desde disco"""
-    if MEMORY_FILE.exists():
-        try:
-            return json.loads(MEMORY_FILE.read_text(encoding="utf-8"))
-        except:
-            return []
-    return []
+    session_id = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    path = f"{SESSION_DIR}/session_{session_id}.json"
 
+    with open(path, "w") as f:
+        json.dump([], f)
 
-def save_memory(history):
-    """Guarda memoria en disco"""
-    MEMORY_FILE.write_text(
-        json.dumps(history, indent=2, ensure_ascii=False),
-        encoding="utf-8"
-    )
+    return path
+
+def load_session(path):
+    with open(path, "r") as f:
+        return json.load(f)
+
+def save_session(path, history):
+    with open(path, "w") as f:
+        json.dump(history, f, indent=2)
