@@ -1,6 +1,7 @@
 import logging
 import os
 from logging.handlers import RotatingFileHandler
+import sys
 
 TRACE_LEVEL = 5
 logging.addLevelName(TRACE_LEVEL, "TRACE")
@@ -19,14 +20,16 @@ formatter = logging.Formatter(
 )
 
 #terminal
-console_handler = logging.StreamHandler()
+sys.stdout.reconfigure(encoding="utf-8")
+console_handler = logging.StreamHandler(sys.stdout)
 console_handler.setFormatter(formatter)
 
 #archivo de rotacion
 file_handler = RotatingFileHandler(
     "agent.log",
     maxBytes=1_000_000,  # 1 MB
-    backupCount=5        # guarda 5 archivos viejos
+    backupCount=5,       
+    encoding="utf-8"     
 )
 
 file_handler.setFormatter(formatter)
