@@ -1,7 +1,6 @@
 #Modulo de logica de envio y muestra de mensaje
 from api import send_message
 from memory import (
-    create_session, 
     load_session, 
     save_session, 
     load_long_memory, 
@@ -14,13 +13,13 @@ MAX_HISTORY = 20
 
 class Assistant():
     #Clase asistente
-    def __init__ (self, name: str, model: str, system_promp: str) -> None:
+    def __init__ (self, name: str, model: str, system_promp: str, session_file) -> None:
         self.name = name
         self.model = model
         self.system_prompt = system_promp
 
-        self.session_file = create_session()
-        self.history_context = load_session(self.session_file)
+        self.session_file = session_file
+        self.history_context = load_session(session_file)
 
         self.long_memory = load_long_memory()
 

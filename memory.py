@@ -32,13 +32,24 @@ def list_sessions():
     return sorted(files)
 
 def load_long_memory():
+
     if not os.path.exists(LONG_MEMORY_FILE):
         return {}
 
-    with open(LONG_MEMORY_FILE, "r") as f:
-        return json.load(f)
+    try:
+        with open(LONG_MEMORY_FILE, "r", encoding="utf-8") as f:
+            content = f.read().strip()
 
+            if not content:   # ← archivo vacío
+                return {}
+
+            return json.loads(content)
+
+    except json.JSONDecodeError:
+        return {}
 
 def save_long_memory(data):
-    with open(LONG_MEMORY_FILE, "w") as f:
+    os.makedirs("memory", exist_ok=True)
+
+    with open(LONG_MEMORY_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
