@@ -19,7 +19,7 @@ class Assistant():
         self.system_prompt = system_promp
 
         self.session_file = session_file
-        self.history_context = load_session(session_file)
+        self.history_context = load_session(session_file) or []
 
         self.long_memory = load_long_memory()
 
@@ -29,7 +29,7 @@ class Assistant():
         self.history_context.append({"role": role, "content": content})
 
         # limito el contexto
-        self.history_context = self.history_context[-MAX_HISTORY:]
+        self.history_context = self.history_context[-MAX_HISTORY: ]
 
         save_session(self.session_file, self.history_context)
     
@@ -47,6 +47,8 @@ class Assistant():
 
         self.add_history("user", user_message)
 
+        print("Historial después de user:", len(self.history_context))
+
         self.update_long_memory(user_message)
     
         logger.trace(f"Historial antes del envío: {self.history_context}")
@@ -54,7 +56,6 @@ class Assistant():
         telemetry.start()
 
         response = send_message(
-            user_message,
             model=self.model,
             system_prompt=self.system_prompt,
             history_context=self.history_context,
@@ -63,8 +64,16 @@ class Assistant():
 
         logger.trace(f"Respuesta cruda: {response}")
 
-        self.add_history("assistant", response)
+        print(response["usage"])
+
+        logger.debug(f"Historial final: {self.history_context}")
+
+        # 3️⃣ Solo si hubo respuesta válida, guardar assistant
+        if response and response.get("content"):
+            self.add_history("assistant", response["content"])
+        
+        print("Historial después de assistant:", len(self.history_context))
 
         telemetry.report(response, self.history_context)  
 
-        logger.debug(f"Historial final: {self.history_context}")
+        return response

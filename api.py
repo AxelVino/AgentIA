@@ -3,12 +3,13 @@ import os
 import requests
 import time
 from dotenv import load_dotenv
+import json
 
 load_dotenv()
 
 API_KEY = os.getenv("GROQ_API_KEY")
 
-def send_message(user_message, model, system_prompt, history_context, assistant_name="IA"):
+def send_message(model, system_prompt, history_context, assistant_name="IA"):
 
     """Envía un mensaje a la API de Groq y devuelve la respuesta del agente."""
 
@@ -20,16 +21,13 @@ def send_message(user_message, model, system_prompt, history_context, assistant_
     payload = {
         "model": model,
         "stream": True,
+        "stream_options": {"include_usage": True},
         "messages": [
             {
                 "role": "system",
                 "content": system_prompt
             },
-            *history_context,
-            {
-                "role": "user",
-                "content": user_message
-            }
+            *history_context
         ]
     }
     try:
@@ -42,29 +40,50 @@ def send_message(user_message, model, system_prompt, history_context, assistant_
     except requests.exceptions.HTTPError as e:
         return f"⚠️ Error API: {e}"
     
-    fullResponse = ""
+    full_response = ""
     first_token = True
+    usage_data = None
 
     for line in response.iter_lines():
-        if line:
-            decoded = line.decode("utf-8")
+        if not line:
+            continue
 
-            if decoded.startswith("data: "):
-                data = decoded[6:]
+        decoded = line.decode("utf-8")
 
-            if data == "[DONE]":
-                break
+        if not decoded.startswith("data: "):
+            continue
 
-            import json
-            chunk = json.loads(data)
+        data = decoded[6:]
 
-            content = chunk["choices"][0]["delta"].get("content", "")
+        if data == "[DONE]":
+            break
+
+        chunk = json.loads(data)
+
+        # Capturar usage si viene en este chunk
+
+        if "usage" in chunk:
+            usage_data = chunk["usage"]
+            continue
+
+        # Streaming normal de texto
+
+        delta = chunk["choices"][0]["delta"]
+        content = delta.get("content", "")
+
+        if content:
             if first_token:
-                print("\r" + " " * 40 + "\r", end="")  # borra el "pensando..."
+                print("\r" + " " * 40 + "\r", end="")
                 print(f"🤖 {assistant_name}: ", end="")
                 first_token = False
+
             print(content, end="", flush=True)
-            fullResponse += content
+            full_response += content
             time.sleep(0.01)
+
     print()
-    return fullResponse
+
+    return {
+        "content": full_response,
+        "usage": usage_data
+    }
