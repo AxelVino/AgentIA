@@ -2,33 +2,34 @@
 
 Un asistente virtual de inteligencia artificial conversacional para la terminal, potenciado por los modelos ultrarrápidos de la API de [Groq](https://groq.com/).
 
-Este proyecto permite iniciar rápidamente una IA con personalidad configurable, soporte para respuestas fluidas (streaming), memoria de sesión y largo plazo, telemetría de rendimiento y un sistema de logs profesional con nivel TRACE personalizado.
+Este proyecto permite iniciar rápidamente una IA con personalidad configurable, soporte para respuestas fluidas (streaming), memoria de sesión y largo plazo, telemetría detallada con datos reales de la API y un sistema de logs profesional con nivel TRACE personalizado.
 
 ## Funcionalidades
 
-- **Respuestas en Streaming:** Experimenta contestaciones en tiempo real sin esperas prolongadas, con limpieza automática del indicador "pensando...".
+- **Respuestas en Streaming:** Experimenta contestaciones en tiempo real sin esperas prolongadas, con limpieza automática del indicador "pensando..." y delay configurable entre tokens.
 - **Selección de Sesión:** Al iniciar, podés elegir retomar una conversación anterior o comenzar una nueva. Las sesiones se guardan automáticamente en `memory/sessions/` como archivos `.json`.
 - **Memoria de Largo Plazo:** El asistente detecta preferencias del usuario en tiempo real (ej: frases con "me gusta") y las persiste en `memory/long_memory.json` entre sesiones.
 - **Sistema Customizado de Persona:** Configura fácilmente el System Prompt (por defecto, un experto en juegos indie llamado *Cortana*) para cambiar el enfoque, restricciones o comportamiento del asistente.
-- **Telemetría Integrada:** Cada respuesta registra el tiempo de respuesta, la cantidad aproximada de tokens generados y el tamaño del historial activo.
+- **Telemetría Real de la API:** Cada respuesta registra el tiempo total de respuesta y los datos reales de la API de Groq: tokens consumidos (total, prompt, completion) y tiempos internos (queue, prompt, completion).
 - **Logger Profesional con Nivel TRACE:** Sistema de logs con nivel `TRACE` personalizado (más detallado que `DEBUG`). Salida doble: consola con UTF-8 y archivo rotativo `agent.log` (máx. 1 MB, 5 backups). Niveles configurables vía variable de entorno.
 
 ## Estructura del Proyecto
 
 ```
 Agent_IA_GROQ/
-├── main.py            # Punto de entrada: selección de sesión e inicio del chat
-├── agent.py           # Clase Assistant: lógica de historial, memoria y respuesta
-├── api.py             # Cliente HTTP hacia la API de Groq (streaming)
-├── memory.py          # Gestión de sesiones y memoria de largo plazo
-├── logger.py          # Logger con nivel TRACE, handlers de consola y archivo rotativo
-├── telemetry.py       # Medición de tiempo, tokens estimados y tamaño de contexto
-├── requirements.txt   # Dependencias del proyecto
-├── .env               # Variables de entorno (no incluido en el repositorio)
-├── agent.log          # Archivo de log rotativo (generado en ejecución)
+├── main.py                # Punto de entrada: selección de sesión e inicio del chat
+├── agent.py               # Clase Assistant: lógica de historial, memoria y respuesta
+├── api.py                 # Cliente HTTP hacia la API de Groq (streaming + usage real)
+├── memory.py              # Gestión de sesiones y memoria de largo plazo
+├── logger.py              # Logger con nivel TRACE, handlers de consola y archivo rotativo
+├── telemetry.py           # Telemetría con datos reales de la API (tokens y tiempos)
+├── test.py                # Script de pruebas y experimentos
+├── requirements.txt       # Dependencias del proyecto (versiones fijadas)
+├── .env                   # Variables de entorno (no incluido en el repositorio)
+├── agent.log              # Archivo de log rotativo (generado en ejecución)
 └── memory/
-    ├── sessions/      # Archivos JSON de sesiones de chat
-    ├── long_memory.json      # Preferencias y datos persistentes del usuario
+    ├── sessions/          # Archivos JSON de sesiones de chat
+    ├── long_memory.json   # Preferencias y datos persistentes del usuario
     └── template_memory.json  # Plantilla base para la memoria
 ```
 
@@ -94,22 +95,37 @@ Para salir, escribí `salir`, `exit` o `quit`.
 
 El sistema de logs acepta los siguientes niveles configurables vía `LOG_LEVEL` en `.env`:
 
-| Nivel   | Detalle                                                       |
-|---------|---------------------------------------------------------------|
-| `TRACE` | Historial completo, respuesta cruda de la API (máx. detalle) |
-| `DEBUG` | Historial final tras cada turno, tamaño del contexto          |
-| `INFO`  | Estado del asistente, telemetría de rendimiento               |
-| `WARNING` | Advertencias del sistema                                   |
-| `ERROR` | Errores críticos                                              |
+| Nivel     | Detalle                                                                |
+|-----------|------------------------------------------------------------------------|
+| `TRACE`   | Historial completo antes del envío, respuesta cruda de la API          |
+| `DEBUG`   | Historial final tras cada turno, tiempos internos de Groq, context size |
+| `INFO`    | Estado del asistente, telemetría completa con tokens y tiempos reales  |
+| `WARNING` | Sin datos de usage o advertencias del sistema                          |
+| `ERROR`   | Errores críticos                                                       |
+
+## Telemetría de Rendimiento
+
+Cada turno de conversación loguea automáticamente en nivel `INFO`:
+
+```
+Telemetry | ⏱️ total=1.243s | 🤖 api=1.102s | 🔢 total=312 | 📥 prompt=180 | 📤 completion=132 | 📚 mensajes=6
+```
+
+Y en nivel `DEBUG`:
+
+```
+Detalles timing | queue=0.001s | prompt_time=0.045s | completion_time=1.056s
+Context size chars=2840
+```
 
 ## Dependencias Principales
 
-| Paquete         | Uso                                              |
-|-----------------|--------------------------------------------------|
-| `groq`          | SDK oficial de Groq para consultas a la API      |
-| `requests`      | Cliente HTTP para streaming con la API de Groq   |
-| `python-dotenv` | Carga de variables de entorno desde `.env`       |
-| `pydantic`      | Validación de datos (requerida por el SDK groq)  |
+| Paquete         | Versión   | Uso                                              |
+|-----------------|-----------|--------------------------------------------------|
+| `groq`          | 1.0.0     | SDK oficial de Groq para consultas a la API      |
+| `requests`      | 2.32.5    | Cliente HTTP para streaming con la API de Groq   |
+| `python-dotenv` | 1.2.1     | Carga de variables de entorno desde `.env`       |
+| `pydantic`      | 2.12.5    | Validación de datos (requerida por el SDK groq)  |
 
 ---
 _Creado y estructurado bajo los estándares de una IA lista y modular._

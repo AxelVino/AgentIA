@@ -79,7 +79,7 @@ def send_message(model, system_prompt, history_context, assistant_name="IA"):
 
             print(content, end="", flush=True)
             full_response += content
-            time.sleep(0.01)
+            time.sleep(0.002)
 
     print()
 

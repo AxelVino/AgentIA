@@ -17,7 +17,7 @@ class Telemetry:
 
     def report(self, response: dict, history: list):
 
-        duration = self.stop()
+        total_duration = self.stop()
 
         if not response:
             logger.warning("Telemetry | No response received")
@@ -27,14 +27,17 @@ class Telemetry:
 
         if not usage:
             logger.warning(
-                f"Telemetry | ⏱️ {duration}s | ⚠️ No usage data | "
+                f"Telemetry | ⏱️ total={total_duration}s | ⚠️ No usage data | "
                 f"📚 mensajes={len(history)}"
             )
             return
 
+        api_time = usage.get("total_time", 0)
+
         logger.info(
             f"Telemetry | "
-            f"⏱️ {duration}s | "
+            f"⏱️ total={total_duration}s | "
+            f"🤖 api={api_time:.3f}s | "
             f"🔢 total={usage.get('total_tokens', 0)} | "
             f"📥 prompt={usage.get('prompt_tokens', 0)} | "
             f"📤 completion={usage.get('completion_tokens', 0)} | "
@@ -45,8 +48,7 @@ class Telemetry:
             f"Detalles timing | "
             f"queue={usage.get('queue_time', 0):.3f}s | "
             f"prompt_time={usage.get('prompt_time', 0):.3f}s | "
-            f"completion_time={usage.get('completion_time', 0):.3f}s | "
-            f"total_api_time={usage.get('total_time', 0):.3f}s"
+            f"completion_time={usage.get('completion_time', 0):.3f}s"
         )
 
         context_size = sum(len(m["content"]) for m in history)
