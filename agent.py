@@ -8,6 +8,8 @@ from memory import (
 )
 from logger import logger
 from telemetry import Telemetry
+from memory.summary import ConversationSummary
+from memory.summarizer import Summarizer
 
 MAX_HISTORY = 20
 
@@ -20,6 +22,8 @@ class Assistant():
 
         self.session_file = session_file
         self.history_context = load_session(session_file) or []
+        self.summary = ConversationSummary()
+        self.summarizer = Summarizer(model="llama-3.1-8b-instant")
 
         self.long_memory = load_long_memory()
 

@@ -1,7 +1,7 @@
 """Main principal"""
 import os
 from agent import Assistant
-from memory import list_sessions, create_session
+from memory.memory import list_sessions, create_session
 
 def choose_session():
 
