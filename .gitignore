@@ -13,13 +13,10 @@ __pycache__/
 memory/sessions/
 memory/*.json
 
-# Opcional: permitir template
-!memory/template_memory.json
 
 # Entorno virtual
 venv/
 .env
 
-# Memory runtime (NO versionar)
+# Memory runtime
 memory.json
-memory/
