@@ -11,18 +11,43 @@ def create_session():
     session_id = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     path = f"{SESSION_DIR}/session_{session_id}.json"
 
-    with open(path, "w") as f:
-        json.dump([], f)
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(
+            {
+                "history": [],
+                "summary": {}
+            },
+            f,
+            indent=2,
+            ensure_ascii=False
+        )
 
     return path
 
 def load_session(path):
-    with open(path, "r") as f:
-        return json.load(f)
 
-def save_session(path, history):
-    with open(path, "w") as f:
-        json.dump(history, f, indent=2, ensure_ascii=False)
+    if not os.path.exists(path): #Si no existe la sesion, devuelve un diccionario vacio
+        return {"history": [], "summary": {}}
+
+    with open(path, "r", encoding="utf-8") as f: #Abro el archivo en modo lectura
+        data = json.load(f)
+
+    # compatibilidad con sesiones viejas
+    if isinstance(data, list): #Si el archivo es una lista, lo convierto a diccionario
+        return {"history": data, "summary": {}}
+
+    return data
+
+def save_session(path, history, summary):
+
+    #Persisto el summary junto con el historial en cada sesion
+    session_data = {
+        "history": history,
+        "summary": summary,
+    }
+
+    with open(path, "w", encoding="utf-8") as f:
+        json.dump(session_data, f, indent=2, ensure_ascii=False)
 
 def list_sessions():
     if not os.path.exists(SESSION_DIR):
@@ -53,3 +78,9 @@ def save_long_memory(data):
 
     with open(LONG_MEMORY_FILE, "w", encoding="utf-8") as f:
         json.dump(data, f, indent=2, ensure_ascii=False)
+
+def trim_history(history):
+
+    MAX_HISTORY = 10
+
+    return history[-MAX_HISTORY:]

@@ -14,6 +14,18 @@ class ConversationSummary:
             "important_context": [],
             "notes": ""
         }
+    
+    def load_from_dict(self, saved_data: dict):
+        """
+        Rellena la estructura base (defaults) solo con los datos que 
+        existan en la sesión guardada, evitando borrar nuevas claves.
+        """
+        if not saved_data:
+            return
+
+        for key in self.data.keys():
+            if key in saved_data:
+                self.data[key] = saved_data[key]
 
     def update(self, new_data: dict):
         """
@@ -36,18 +48,24 @@ class ConversationSummary:
 
     def to_prompt(self):
         """
-        Convierte el summary en texto que el modelo pueda entender.
-        """
-
-        return f"""
-Conversation memory:
-
-Topics: {self.data['topics']}
-User preferences: {self.data['user_preferences']}
-Games already recommended: {self.data['games_recommended']}
-Facts: {self.data['facts']}
-Decisions: {self.data['decisions']}
-Open questions: {self.data['open_questions']}
-Important context: {self.data['important_context']}
-Notes: {self.data['notes']}
-"""
+        Convierte el summary en texto para el prompt.
+        Retorna None si está completamente vacío.
+        """ 
+        lines = []
+        labels = {
+            "topics":            "Topics",
+            "user_preferences":  "User preferences",
+            "games_recommended": "Games already recommended",
+            "facts":             "Facts",
+            "decisions":         "Decisions",
+            "open_questions":    "Open questions",
+            "important_context": "Important context",
+            "notes":             "Notes",
+        }
+        for key, label in labels.items():
+            value = self.data.get(key)
+            if value:  # ignora listas vacías [] y strings vacíos ""
+                lines.append(f"{label}: {value}")
+        if not lines:
+            return None  # nada que inyectar
+        return "Conversation memory:\n" + "\n".join(lines)

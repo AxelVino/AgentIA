@@ -10,16 +10,20 @@ Documento técnico que describe la arquitectura modular del proyecto, el rol de 
 Agent_IA_GROQ/
 ├── main.py                        # Punto de entrada del programa
 ├── agent.py                       # Clase Assistant (núcleo lógico)
-├── api.py                         # Cliente HTTP hacia la API de Groq (streaming + usage)
-├── memory.py                      # Gestión de sesiones y memoria larga
+├── api.py                         # Cliente HTTP hacia la API de Groq (streaming + summary injection)
 ├── logger.py                      # Sistema de logging con nivel TRACE
 ├── telemetry.py                   # Medición de rendimiento con datos reales de la API
+├── token_guard.py                 # (En desarrollo) Protección contra desbordamiento de tokens
 ├── test.py                        # Script de pruebas y experimentos
 ├── requirements.txt               # Dependencias del entorno (versiones fijadas)
 ├── .env                           # Variables de entorno (no versionado)
 ├── .gitignore                     # Exclusiones de git
 ├── agent.log                      # Log rotativo (generado en ejecución)
-└── memory/
+└── memory/                        # Paquete Python de memoria
+    ├── __init__.py                # Re-exporta todos los símbolos del paquete
+    ├── memory.py                  # Gestión de sesiones y memoria larga
+    ├── conversation_summary.py    # Clase ConversationSummary: memoria comprimida estructurada
+    ├── summarizer.py              # Clase Summarizer: compresión de historial vía LLM
     ├── sessions/                  # Sesiones de chat por timestamp
     │   └── session_YYYY-MM-DD_HH-MM-SS.json
     ├── long_memory.json           # Preferencias persistentes del usuario
@@ -44,44 +48,58 @@ Agent_IA_GROQ/
 
 ### `agent.py` — Clase `Assistant`
 
-**Responsabilidad:** Núcleo lógico del asistente. Orquesta la memoria, la API y la telemetría.
+**Responsabilidad:** Núcleo lógico del asistente. Orquesta memoria, compresión de contexto, API y telemetría.
 
-| Atributo / Método            | Descripción                                                              |
-|------------------------------|--------------------------------------------------------------------------|
-| `name`                       | Nombre visible del asistente (ej: *Cortana*)                             |
-| `model`                      | Modelo de Groq a utilizar                                                |
-| `system_prompt`              | Instrucciones de personalidad y restricciones del asistente              |
-| `session_file`               | Ruta del archivo `.json` de sesión activa                                |
-| `history_context`            | Historial cargado desde la sesión (lista de mensajes)                    |
-| `long_memory`                | Diccionario con datos persistentes cargados de `long_memory.json`        |
-| `add_history(role, content)` | Agrega mensaje al historial, limita a `MAX_HISTORY=20` turnos y persiste |
-| `update_long_memory(text)`   | Detecta frases con "me gusta" y guarda preferencias                      |
-| `answer(user_message)`       | Flujo completo: telemetría → API → historial → log. **Retorna** el `dict` de respuesta |
+| Atributo / Método              | Descripción                                                                    |
+|--------------------------------|--------------------------------------------------------------------------------|
+| `name`                         | Nombre visible del asistente (ej: *Cortana*)                                   |
+| `model`                        | Modelo principal de Groq a utilizar                                            |
+| `system_prompt`                | Instrucciones de personalidad y restricciones del asistente                    |
+| `session_file`                 | Ruta del archivo `.json` de sesión activa                                      |
+| `history_context`              | Historial cargado desde la sesión (lista de mensajes)                          |
+| `summary`                      | Instancia de `ConversationSummary`: memoria comprimida activa                  |
+| `summarizer`                   | Instancia de `Summarizer` usando `llama-3.1-8b-instant`                        |
+| `long_memory`                  | Diccionario con datos persistentes cargados de `long_memory.json`              |
+| `add_history(role, content)`   | Agrega mensaje al historial, limita a `MAX_HISTORY=20` turnos y persiste       |
+| `update_long_memory(text)`     | Detecta frases con "me gusta" y guarda preferencias                            |
+| `maybe_summarize()`            | Si el historial supera 12 mensajes, comprime los 6 más antiguos con el Summarizer |
+| `answer(user_message)`         | Flujo completo: historial → memoria larga → compresión → API → telemetría      |
 
 **Constante clave:** `MAX_HISTORY = 20` (ventana de contexto enviada a la API).
 
-**Notas de estado actual:**
-- `answer()` retorna el `dict` `{"content": str, "usage": dict}` recibido desde `api.py`.
-- Contiene `print` de debug temporales: tamaño del historial y datos de `usage` por consola.
-- Pasa `assistant_name=self.name` a `send_message()` para mostrar el nombre correcto en el stream.
+**Lógica de compresión (`maybe_summarize`):**
+```
+si len(history) > 12:
+    old_chunk = history[:6]
+    summary_data = summarizer.summarize(old_chunk, current_summary)
+    summary.update(summary_data)
+    history = history[6:]   ← los 6 viejos son reemplazados por el summary
+```
 
 ---
 
 ### `api.py` — Cliente HTTP
 
-**Responsabilidad:** Enviar mensajes a la API de Groq con streaming y devolver contenido + métricas de uso reales.
+**Responsabilidad:** Enviar mensajes a la API de Groq con streaming e inyección opcional de summary.
 
 - Endpoint: `https://api.groq.com/openai/v1/chat/completions`
 - Método: `POST` con `stream: True` y `stream_options: {"include_usage": True}`
-- Construye el payload con `system_prompt`, el `history_context` y el mensaje actual del usuario.
+- Construye el payload con `system_prompt`, `summary` (opcional) y `history_context`:
+  ```
+  messages = [system_prompt] + [summary_system_msg?] + history_context
+  ```
 - Procesa el stream línea a línea (`iter_lines`):
   - Imprime cada token en tiempo real con un pequeño delay (`time.sleep(0.002)`).
-  - Captura el chunk `usage` si viene al final del stream (tokens reales de la API).
+  - Captura el chunk `usage` al final del stream (tokens reales de la API).
   - Limpia el indicador "pensando..." con escape de consola antes del primer token.
 - Maneja errores: `Timeout`, `ConnectionError`, `HTTPError`.
 
-**Retorno:** `dict` con dos claves:
+**Firma:**
+```python
+send_message(model, system_prompt, history_context, assistant_name="IA", summary=None)
+```
 
+**Retorno:**
 ```python
 {
     "content": str,   # texto completo de la respuesta
@@ -89,23 +107,20 @@ Agent_IA_GROQ/
 }
 ```
 
-**Campos del `usage`:**
-
-| Campo               | Descripción                              |
-|---------------------|------------------------------------------|
-| `total_tokens`      | Total de tokens consumidos               |
-| `prompt_tokens`     | Tokens del prompt/historial              |
-| `completion_tokens` | Tokens generados en la respuesta         |
-| `total_time`        | Tiempo total de la solicitud (segundos)  |
-| `queue_time`        | Tiempo en cola en los servidores de Groq |
-| `prompt_time`       | Tiempo de evaluación del prompt          |
-| `completion_time`   | Tiempo de generación de la respuesta     |
-
 ---
 
-### `memory.py` — Gestión de Memoria
+### `memory/` — Paquete de Memoria
 
-**Responsabilidad:** Persistir el historial de sesiones y la memoria de largo plazo.
+El directorio `memory/` es un **paquete Python** (contiene `__init__.py`) que centraliza toda la lógica de persistencia y compresión de contexto.
+
+#### `memory/__init__.py`
+
+Re-exporta todos los símbolos del paquete para permitir imports cortos:
+```python
+from memory import load_session, ConversationSummary, Summarizer
+```
+
+#### `memory/memory.py` — Gestión de Sesiones
 
 | Función                       | Descripción                                                              |
 |-------------------------------|--------------------------------------------------------------------------|
@@ -119,13 +134,46 @@ Agent_IA_GROQ/
 **Directorio de sesiones:** `memory/sessions/`  
 **Formato de archivo:** `session_YYYY-MM-DD_HH-MM-SS.json`
 
+#### `memory/conversation_summary.py` — Clase `ConversationSummary`
+
+**Responsabilidad:** Mantener en memoria la representación comprimida y estructurada de la conversación activa.
+
+**Estructura interna (`self.data`):**
+
+| Campo               | Tipo   | Descripción                                            |
+|---------------------|--------|--------------------------------------------------------|
+| `topics`            | list   | Temas principales de la conversación                   |
+| `user_preferences`  | list   | Preferencias detectadas del usuario                    |
+| `games_recommended` | list   | Juegos ya recomendados (evita repetición)              |
+| `facts`             | list   | Hechos objetivos mencionados                           |
+| `decisions`         | list   | Decisiones tomadas durante la conversación             |
+| `open_questions`    | list   | Preguntas sin resolver                                 |
+| `important_context` | list   | Contexto relevante para el agente                      |
+| `notes`             | str    | Notas libres del summarizer                            |
+
+**Métodos:**
+
+| Método          | Descripción                                                                 |
+|-----------------|-----------------------------------------------------------------------------|
+| `update(dict)`  | Fusiona nuevo resumen: acumula listas sin duplicar, sobreescribe strings    |
+| `to_prompt()`   | Formatea `self.data` como texto legible para inyectar en el prompt          |
+
+#### `memory/summarizer.py` — Clase `Summarizer`
+
+**Responsabilidad:** Comprimir un chunk del historial de conversación en JSON estructurado usando un LLM.
+
+- Usa `send_message()` de `api.py` internamente con el modelo configurado.
+- Envía el historial a comprimir junto con el resumen existente.
+- Retorna un `dict` con el esquema de `ConversationSummary`.
+- Incluye `safe_parse()`: si el JSON falla, intenta extraer el bloque `{...}` del texto; si falla de nuevo, retorna un dict vacío con `notes: "summary failed"`.
+
+**Modelo por defecto:** `llama-3.1-8b-instant` (rápido y económico, apropiado para compresión).
+
 ---
 
 ### `logger.py` — Sistema de Logging
 
 **Responsabilidad:** Proveer un logger centralizado con un nivel `TRACE` personalizado y salida dual.
-
-**Configuración:**
 
 | Elemento           | Detalle                                                       |
 |--------------------|---------------------------------------------------------------|
@@ -135,12 +183,6 @@ Agent_IA_GROQ/
 | Formato            | `HH:MM:SS | LEVEL | mensaje`                                 |
 | Configuración      | `LOG_LEVEL` desde `.env` (default: `INFO`)                   |
 | Objeto exportado   | `logger` (importado por `agent.py` y `telemetry.py`)         |
-
-**Niveles disponibles (de mayor a menor detalle):**
-
-```
-TRACE → DEBUG → INFO → WARNING → ERROR
-```
 
 ---
 
@@ -154,31 +196,6 @@ TRACE → DEBUG → INFO → WARNING → ERROR
 | `stop()`                    | Calcula la duración total desde `start()` en segundos                     |
 | `report(response, history)` | Loguea métricas completas usando los datos de `usage` reales de la API    |
 
-**Métricas reportadas en `INFO`:**
-
-| Métrica         | Fuente                     |
-|-----------------|----------------------------|
-| `total`         | Tiempo medido localmente    |
-| `api`           | `usage["total_time"]`      |
-| `total_tokens`  | `usage["total_tokens"]`    |
-| `prompt_tokens` | `usage["prompt_tokens"]`   |
-| `completion`    | `usage["completion_tokens"]`|
-| `mensajes`      | `len(history)`             |
-
-**Métricas adicionales en `DEBUG`:**
-
-- `queue_time`, `prompt_time`, `completion_time` (tiempos internos de Groq)
-- `context_size` — tamaño total del historial en caracteres
-
----
-
-### `test.py` — Script de Pruebas
-
-**Responsabilidad:** Espacio para pruebas y experimentos rápidos durante el desarrollo.
-
-- Archivo mínimo, generado durante el proceso de desarrollo.
-- No forma parte del flujo principal de la aplicación.
-
 ---
 
 ## Flujo de Ejecución
@@ -186,24 +203,29 @@ TRACE → DEBUG → INFO → WARNING → ERROR
 ```
 python main.py
     │
-    ├── choose_session()          ← Seleccionar o crear sesión
-    │       └── memory.py
+    ├── choose_session()             ← Seleccionar o crear sesión
+    │       └── memory.memory
     │
-    ├── Assistant.__init__()      ← Cargar sesión + memoria larga
-    │       └── memory.py
+    ├── Assistant.__init__()         ← Cargar sesión + memoria larga + inicializar summary
+    │       ├── memory.memory
+    │       ├── ConversationSummary()
+    │       └── Summarizer(model="llama-3.1-8b-instant")
     │
     └── Loop: usuario escribe
             │
             ├── Assistant.answer()
             │       ├── add_history("user", ...)
-            │       ├── update_long_memory(...)   ← detecta preferencias
-            │       ├── logger.info / logger.trace
+            │       ├── update_long_memory(...)      ← detecta preferencias
+            │       ├── logger.trace (historial)
             │       ├── Telemetry.start()
-            │       ├── api.send_message()        ← streaming a Groq + usage real
-            │       ├── logger.trace (respuesta cruda)
-            │       ├── add_history("assistant", ...)  ← solo si hay contenido
-            │       ├── Telemetry.report()        ← log con datos reales de API
-            │       └── return response           ← dict {content, usage}
+            │       ├── maybe_summarize()            ← comprime si history > 12
+            │       │       ├── Summarizer.summarize(old_chunk, summary)
+            │       │       │       └── api.send_message() → LLM compressor
+            │       │       └── ConversationSummary.update(summary_data)
+            │       ├── api.send_message()           ← streaming a Groq + summary injection
+            │       ├── add_history("assistant", ...)
+            │       ├── Telemetry.report()           ← log con datos reales de API
+            │       └── return response              ← dict {content, usage}
             │
             └── [salir / exit / quit] → fin
 ```
@@ -216,23 +238,31 @@ python main.py
 main.py
   ├── agent.py
   │     ├── api.py
-  │     ├── memory.py
+  │     ├── memory/
+  │     │     ├── __init__.py
+  │     │     ├── memory.py
+  │     │     ├── conversation_summary.py
+  │     │     └── summarizer.py
+  │     │           └── api.py
   │     ├── logger.py
   │     └── telemetry.py
   │           └── logger.py
-  └── memory.py
+  └── memory/
+        └── memory.py
 ```
 
 ---
 
 ## Variables de Entorno (`.env`)
 
-| Variable       | Requerida | Descripción                                          | Ejemplo           |
-|----------------|-----------|------------------------------------------------------|-------------------|
-| `GROQ_API_KEY` | ✅ Sí     | Clave de autenticación de la API de Groq             | `gsk_...`         |
-| `MODEL`        | ✅ Sí     | Modelo a usar (debe existir en Groq)                 | `llama3-70b-8192` |
-| `LOG_LEVEL`    | ❌ No     | Nivel del logger (default: `INFO`)                   | `DEBUG`, `TRACE`  |
+| Variable       | Requerida | Descripción                                          | Ejemplo                  |
+|----------------|-----------|------------------------------------------------------|--------------------------|
+| `GROQ_API_KEY` | ✅ Sí     | Clave de autenticación de la API de Groq             | `gsk_...`                |
+| `MODEL`        | ✅ Sí     | Modelo principal (debe existir en Groq)              | `llama3-70b-8192`        |
+| `LOG_LEVEL`    | ❌ No     | Nivel del logger (default: `INFO`)                   | `DEBUG`, `TRACE`         |
+
+> **Nota:** El modelo del `Summarizer` está hardcodeado como `llama-3.1-8b-instant` en `agent.py` para mantenerlo rápido y separado del modelo principal.
 
 ---
 
-_Documentación actualizada al estado actual del proyecto — 2026-03-04._
+_Documentación actualizada al estado actual del proyecto — 2026-03-06._

@@ -1,28 +1,86 @@
+import json
+from api import send_message
+from logger import logger
+
+
 class Summarizer:
 
-    def __init__(self, client, model="gpt-4o-mini"):
-        self.client = client
+    def __init__(self, model):
         self.model = model
 
-    def summarize(self, history):
+    def summarize(self, history_chunk, current_summary):
 
         prompt = f"""
-        Compress the following conversation.
+You are a conversation compression system.
 
-        Return JSON with:
-        topics
-        decisions
-        facts
-        notes
+Your task is to summarize the conversation history into structured JSON.
 
-        Conversation:
-        {history}
-        """
+Return ONLY valid JSON.
 
-        response = self.client.chat.completions.create(
+Schema:
+
+{{
+ "topics": [],
+ "user_preferences": [],
+ "games_recommended": [],
+ "facts": [],
+ "decisions": [],
+ "open_questions": [],
+ "important_context": [],
+ "notes": ""
+}}
+
+Existing summary:
+{json.dumps(current_summary.data, indent=2)}
+
+Conversation to compress:
+{json.dumps(history_chunk, indent=2)}
+
+Return JSON only.
+"""
+
+        response = send_message(
             model=self.model,
-            messages=[{"role": "user", "content": prompt}],
-            temperature=0
+            system_prompt="You compress conversations into structured memory.",
+            history_context=[],
+            assistant_name="Summarizer",
+            user_message=prompt
         )
 
-        return response.choices[0].message.content
+        text = response["content"]
+
+        parsed = self.safe_parse(text)
+
+        return parsed
+    
+    def safe_parse(self, text):
+
+        try:
+            return json.loads(text)
+
+        except json.JSONDecodeError:
+
+            logger.warning("Summary JSON inválido, intentando reparación")
+
+            start = text.find("{")
+            end = text.rfind("}") + 1
+
+            if start != -1 and end != -1:
+
+                try:
+                    return json.loads(text[start:end])
+                except:
+                    pass
+
+            logger.error("No se pudo parsear summary")
+
+            return {
+                "topics": [],
+                "user_preferences": [],
+                "games_recommended": [],
+                "facts": [],
+                "decisions": [],
+                "open_questions": [],
+                "important_context": [],
+                "notes": "summary failed"
+            }

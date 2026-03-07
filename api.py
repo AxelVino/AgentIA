@@ -5,13 +5,29 @@ import time
 from dotenv import load_dotenv
 import json
 
+
 load_dotenv()
 
 API_KEY = os.getenv("GROQ_API_KEY")
 
-def send_message(model, system_prompt, history_context, assistant_name="IA"):
+def send_message(model, system_prompt, history_context, assistant_name="IA", summary = None):
 
     """Envía un mensaje a la API de Groq y devuelve la respuesta del agente."""
+
+    messages = [
+        {
+            "role": "system",
+            "content": system_prompt
+        }
+    ]
+
+    if summary:
+        messages.append({
+            "role": "system",
+            "content": f"Conversation summary:\n{summary}"
+        })
+
+    messages.extend(history_context)
 
     url = "https://api.groq.com/openai/v1/chat/completions"
     headers = {
@@ -22,13 +38,7 @@ def send_message(model, system_prompt, history_context, assistant_name="IA"):
         "model": model,
         "stream": True,
         "stream_options": {"include_usage": True},
-        "messages": [
-            {
-                "role": "system",
-                "content": system_prompt
-            },
-            *history_context
-        ]
+        "messages": messages
     }
     try:
         response = requests.post(url, headers=headers, json=payload, timeout=30, stream=True)
