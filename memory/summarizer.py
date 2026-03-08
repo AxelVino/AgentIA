@@ -52,6 +52,38 @@ Return JSON only.
         parsed = self.safe_parse(text)
 
         return parsed
+
+    def compress(self, summary_prompt):
+        prompt = f"""
+You are a conversation compression system.
+
+Your task is to take the following existing summary and make it more concise, removing redundant details but keeping the core information.
+Return ONLY valid JSON matching this schema:
+
+{{
+ "topics": [],
+ "user_preferences": [],
+ "games_recommended": [],
+ "facts": [],
+ "decisions": [],
+ "open_questions": [],
+ "important_context": [],
+ "notes": ""
+}}
+
+Existing summary to compress:
+{summary_prompt}
+"""
+
+        response = send_message(
+            model=self.model,
+            system_prompt="You compress conversations into structured memory. Return ONLY JSON.",
+            history_context=[],
+            assistant_name="Summarizer",
+            user_message=prompt
+        )
+
+        return self.safe_parse(response["content"])
     
     def safe_parse(self, text):
 

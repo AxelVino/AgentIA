@@ -29,8 +29,12 @@ def load_session(path):
     if not os.path.exists(path): #Si no existe la sesion, devuelve un diccionario vacio
         return {"history": [], "summary": {}}
 
-    with open(path, "r", encoding="utf-8") as f: #Abro el archivo en modo lectura
-        data = json.load(f)
+    try:
+        with open(path, "r", encoding="utf-8") as f: #Abro el archivo en modo lectura
+            data = json.load(f)
+    except UnicodeDecodeError:
+        with open(path, "r", encoding="latin-1") as f:
+            data = json.load(f)
 
     # compatibilidad con sesiones viejas
     if isinstance(data, list): #Si el archivo es una lista, lo convierto a diccionario

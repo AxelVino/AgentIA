@@ -5,56 +5,56 @@ import time
 from dotenv import load_dotenv
 import json
 
-
 load_dotenv()
 
 API_KEY = os.getenv("GROQ_API_KEY")
 
-def send_message(model, system_prompt, history_context, assistant_name="IA", summary = None):
+
+def send_message(model, context, assistant_name="IA"):
 
     """Envía un mensaje a la API de Groq y devuelve la respuesta del agente."""
 
-    messages = [
-        {
-            "role": "system",
-            "content": system_prompt
-        }
-    ]
-
-    if summary:
-        messages.append({
-            "role": "system",
-            "content": f"Conversation summary:\n{summary}"
-        })
-
-    messages.extend(history_context)
-
     url = "https://api.groq.com/openai/v1/chat/completions"
+
     headers = {
         "Authorization": f"Bearer {API_KEY}",
         "Content-Type": "application/json"
     }
+
     payload = {
         "model": model,
         "stream": True,
         "stream_options": {"include_usage": True},
-        "messages": messages
+        "messages": context
     }
+
     try:
-        response = requests.post(url, headers=headers, json=payload, timeout=30, stream=True)
+
+        response = requests.post(
+            url,
+            headers=headers,
+            json=payload,
+            timeout=30,
+            stream=True
+        )
+
         response.raise_for_status()
+
     except requests.exceptions.Timeout:
-        return "⏱️ La IA tardó demasiado en responder."
+        return {"content": "⏱️ La IA tardó demasiado en responder.", "usage": None}
+
     except requests.exceptions.ConnectionError:
-        return "🌐 Error de conexión."
+        return {"content": "🌐 Error de conexión.", "usage": None}
+
     except requests.exceptions.HTTPError as e:
-        return f"⚠️ Error API: {e}"
-    
+        return {"content": f"⚠️ Error API: {e}", "usage": None}
+
     full_response = ""
     first_token = True
     usage_data = None
 
     for line in response.iter_lines():
+
         if not line:
             continue
 
@@ -70,25 +70,26 @@ def send_message(model, system_prompt, history_context, assistant_name="IA", sum
 
         chunk = json.loads(data)
 
-        # Capturar usage si viene en este chunk
-
+        # Capturar usage
         if "usage" in chunk:
             usage_data = chunk["usage"]
             continue
-
-        # Streaming normal de texto
 
         delta = chunk["choices"][0]["delta"]
         content = delta.get("content", "")
 
         if content:
+
             if first_token:
+
                 print("\r" + " " * 40 + "\r", end="")
                 print(f"🤖 {assistant_name}: ", end="")
                 first_token = False
 
             print(content, end="", flush=True)
+
             full_response += content
+
             time.sleep(0.002)
 
     print()
