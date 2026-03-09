@@ -13,7 +13,7 @@ class TokenGuard:
         self.model_limit = model_limit
         self.response_reserve = response_reserve
         self.max_context = model_limit - response_reserve
-        
+        self.summary_limit = 800
 
         # cargar tokenizer llama3
         mergeable_ranks = load_tiktoken_bpe(tokenizer_path)
@@ -37,7 +37,7 @@ class TokenGuard:
 
         tokens = self.estimate_tokens(summary)
 
-        return tokens > 1500
+        return tokens > self.summary_limit
 
 
     def estimate_context_tokens(

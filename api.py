@@ -10,6 +10,8 @@ load_dotenv()
 API_KEY = os.getenv("GROQ_API_KEY")
 
 
+
+
 def send_message(model, context, assistant_name="IA"):
 
     """Envía un mensaje a la API de Groq y devuelve la respuesta del agente."""
@@ -97,4 +99,15 @@ def send_message(model, context, assistant_name="IA"):
     return {
         "content": full_response,
         "usage": usage_data
+    }
+
+def create_embedding(text):
+
+    response = client.embeddings.create(
+        model="text-embedding-3-small",
+        input=text
+    )
+
+    return {
+        "embedding": response.data[0].embedding
     }
