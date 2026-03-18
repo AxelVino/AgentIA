@@ -80,8 +80,6 @@ class MemoryManager:
                 "importance": 0.5
             }
 
-            self.long_memory.setdefault("preferences", [])
-
             if memory not in self.long_memory["preferences"]:
                 self.long_memory["preferences"].append(memory)
 
